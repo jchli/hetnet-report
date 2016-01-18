@@ -1,0 +1,342 @@
+From 53f62608ba71f4eb811c27b276057b7bc5fc0c64 Mon Sep 17 00:00:00 2001
+From: Jincheng Li <jl4569@columbia.edu>
+Date: Sun, 17 Jan 2016 03:27:55 -0500
+Subject: [PATCH] final demo
+
+Change-Id: I51e46d1818c497aeff42853aecc929ab5076ecf8
+---
+ core/java/android/net/NetworkCapabilities.java     | 50 ++++++++++++++-
+ core/java/android/net/NetworkRequest.java          | 10 +++
+ .../com/android/server/ConnectivityService.java    | 75 +++++++++++++++++++++-
+ .../server/connectivity/NetworkAgentInfo.java      | 33 ++++++++++
+ 4 files changed, 162 insertions(+), 6 deletions(-)
+
+diff --git a/core/java/android/net/NetworkCapabilities.java b/core/java/android/net/NetworkCapabilities.java
+index 3bd12c0..edd659b 100644
+--- a/core/java/android/net/NetworkCapabilities.java
++++ b/core/java/android/net/NetworkCapabilities.java
+@@ -19,6 +19,7 @@ package android.net;
+ import android.os.Parcel;
+ import android.os.Parcelable;
+ import android.text.TextUtils;
++import android.location.Location;
+ import java.lang.IllegalArgumentException;
+ 
+ /**
+@@ -49,6 +50,7 @@ public final class NetworkCapabilities implements Parcelable {
+             mLinkDownBandwidthKbps = nc.mLinkDownBandwidthKbps;
+             mNetworkSpecifier = nc.mNetworkSpecifier;
+             mSignalStrength = nc.mSignalStrength;
++            mLocation = nc.mLocation;
+         }
+     }
+ 
+@@ -62,6 +64,7 @@ public final class NetworkCapabilities implements Parcelable {
+         mLinkUpBandwidthKbps = mLinkDownBandwidthKbps = 0;
+         mNetworkSpecifier = null;
+         mSignalStrength = SIGNAL_STRENGTH_UNSPECIFIED;
++        mLocation = null;
+     }
+ 
+     /**
+@@ -668,8 +671,43 @@ public final class NetworkCapabilities implements Parcelable {
+         return this.mSignalStrength == nc.mSignalStrength;
+     }
+ 
++
++    /**
++     * SINED
++     * Approximate location of the network
++     */
++    private Location mLocation;
++
++    /**
++     * radius in meters
++     * @hide
++     */
++    public static final float LOCATION_RADIUS = 60;
++
+     /**
+-     * Combine a set of Capabilities to this one.  Useful for coming up with the complete set
++     * @hide
++     */
++    public Location getLocation() {
++        return mLocation;
++    }
++
++    /**
++     * @hide
++     */
++    public void setLocation(Location location) {
++        mLocation = location;
++    }
++
++    private boolean satisfiedByLocation(NetworkCapabilities nc) {
++        if (this.mLocation != null && nc.getLocation() != null) {
++                return this.mLocation.distanceTo(nc.mLocation) <= LOCATION_RADIUS;
++        }
++
++        return true;
++    }
++
++    /**
++     * Combine a set of Capabilities to this one. Useful for coming up with the complete set
+      * @hide
+      */
+     public void combineCapabilities(NetworkCapabilities nc) {
+@@ -678,6 +716,7 @@ public final class NetworkCapabilities implements Parcelable {
+         combineLinkBandwidths(nc);
+         combineSpecifiers(nc);
+         combineSignalStrength(nc);
++        // SINED: combine is not well-defined for location
+     }
+ 
+     /**
+@@ -695,7 +734,8 @@ public final class NetworkCapabilities implements Parcelable {
+                 satisfiedByTransportTypes(nc) &&
+                 (onlyImmutable || satisfiedByLinkBandwidths(nc)) &&
+                 satisfiedBySpecifier(nc) &&
+-                (onlyImmutable || satisfiedBySignalStrength(nc)));
++                (onlyImmutable || satisfiedBySignalStrength(nc)) &&
++                (onlyImmutable || satisfiedByLocation(nc)));
+     }
+ 
+     /**
+@@ -841,6 +881,10 @@ public final class NetworkCapabilities implements Parcelable {
+ 
+         String signalStrength = (hasSignalStrength() ? " SignalStrength: " + mSignalStrength : "");
+ 
+-        return "[" + transports + capabilities + upBand + dnBand + specifier + signalStrength + "]";
++        // SINED
++        String location = (mLocation == null ?
++                "" : " Location: " + mLocation.toString());
++
++        return "[" + transports + capabilities + upBand + dnBand + specifier + signalStrength + location + "]";
+     }
+ }
+diff --git a/core/java/android/net/NetworkRequest.java b/core/java/android/net/NetworkRequest.java
+index 7da4818..4a2bfeb 100644
+--- a/core/java/android/net/NetworkRequest.java
++++ b/core/java/android/net/NetworkRequest.java
+@@ -18,6 +18,7 @@ package android.net;
+ 
+ import android.os.Parcel;
+ import android.os.Parcelable;
++import android.location.Location;
+ 
+ /**
+  * Defines a request for a network, made through {@link NetworkRequest.Builder} and used
+@@ -165,6 +166,7 @@ public class NetworkRequest implements Parcelable {
+             mNetworkCapabilities.setLinkUpstreamBandwidthKbps(upKbps);
+             return this;
+         }
++
+         /**
+          * @hide
+          */
+@@ -173,6 +175,14 @@ public class NetworkRequest implements Parcelable {
+             return this;
+         }
+ 
++        // SINED
++        /**
++         * @hide
++         */
++        public void setLocation(Location location) {
++            mNetworkCapabilities.setLocation(location);
++        }
++
+         /**
+          * Sets the optional bearer specific network specifier.
+          * This has no meaning if a single transport is also not specified, so calling
+diff --git a/services/core/java/com/android/server/ConnectivityService.java b/services/core/java/com/android/server/ConnectivityService.java
+index 327fb8a..3695fcc 100644
+--- a/services/core/java/com/android/server/ConnectivityService.java
++++ b/services/core/java/com/android/server/ConnectivityService.java
+@@ -102,6 +102,10 @@ import android.util.SparseArray;
+ import android.util.SparseBooleanArray;
+ import android.util.SparseIntArray;
+ import android.util.Xml;
++import android.location.Location;
++import android.location.LocationRequest;
++import android.location.LocationManager;
++import android.location.LocationListener;
+ 
+ import com.android.internal.R;
+ import com.android.internal.annotations.GuardedBy;
+@@ -219,6 +223,9 @@ public class ConnectivityService extends IConnectivityManager.Stub
+     private INetworkStatsService mStatsService;
+     private INetworkPolicyManager mPolicyManager;
+ 
++    // SINED
++    private LocationManager mLocationManager;
++
+     private String mCurrentTcpBufferSizes;
+ 
+     private static final int ENABLED  = 1;
+@@ -781,6 +788,52 @@ public class ConnectivityService extends IConnectivityManager.Stub
+         mKeepaliveTracker = new KeepaliveTracker(mHandler);
+     }
+ 
++    // SINED
++    // dynamically update default request's location
++    public void startLocationUpdates() {
++        if (DBG) log("listening for location updates");
++        mLocationManager = (LocationManager) 
++            mContext.getSystemService(Context.LOCATION_SERVICE);
++
++        LocationRequest mLocationRequest = new LocationRequest();
++        mLocationRequest.setInterval(3000);
++        mLocationRequest.setFastestInterval(100);
++        mLocationRequest.setQuality(LocationRequest.ACCURACY_FINE);
++        
++        mLocationManager.requestLocationUpdates(mLocationRequest,
++                                                new LocationUpdateListener(),
++                                                mHandler.getLooper());
++
++    }
++
++    // SINED
++    private final class LocationUpdateListener implements LocationListener {
++        @Override
++        public void onLocationChanged(Location location) {
++            if (DBG) log("updating location of mDefaultRequest to " + location.toString());
++            mDefaultRequest.networkCapabilities.setLocation(location);
++
++            NetworkAgentInfo currentNetwork = ConnectivityService.this.getDefaultNetwork();
++            ConnectivityService.this.rematchNetworkAndRequests(currentNetwork, 
++                        ReapUnvalidatedNetworks.REAP);
++        }
++        
++        @Override
++        public void onStatusChanged(String provider, int status, Bundle extras) { 
++            if (DBG) log("onStatusChanged");
++        }
++
++        @Override
++        public void onProviderEnabled(String provider) { 
++            if (DBG) log("onProviderEnabled");
++        }
++
++        @Override
++        public void onProviderDisabled(String provider) {
++            if (DBG) log("onProviderDisabled");
++        }
++    }
++
+     private NetworkRequest createInternetRequestForTransport(int transportType) {
+         NetworkCapabilities netCap = new NetworkCapabilities();
+         netCap.addCapability(NET_CAPABILITY_INTERNET);
+@@ -788,6 +841,15 @@ public class ConnectivityService extends IConnectivityManager.Stub
+         if (transportType > -1) {
+             netCap.addTransportType(transportType);
+         }
++
++        // SINED
++        // default to Columbia location
++        // NOTE: should move this into an app
++        Location loc = new Location("SINED-dev");
++        loc.setLatitude(40.807365);
++        loc.setLongitude(-73.962455);
++        netCap.setLocation(loc);
++
+         return new NetworkRequest(netCap, TYPE_NONE, nextNetworkRequestId());
+     }
+ 
+@@ -1576,6 +1638,9 @@ public class ConnectivityService extends IConnectivityManager.Stub
+         mHandler.sendMessage(mHandler.obtainMessage(EVENT_SYSTEM_READY));
+ 
+         mPermissionMonitor.startMonitoring();
++
++        // SINED
++        startLocationUpdates();
+     }
+ 
+     private BroadcastReceiver mUserPresentReceiver = new BroadcastReceiver() {
+@@ -4338,11 +4403,13 @@ public class ConnectivityService extends IConnectivityManager.Stub
+                 // this request
+                 if (VDBG) {
+                     log("currentScore = " +
+-                            (currentNetwork != null ? currentNetwork.getCurrentScore() : 0) +
+-                            ", newScore = " + newNetwork.getCurrentScore());
++                            (currentNetwork != null ? 
++                             currentNetwork.getScoreForRequest(nri.request) : 0) +
++                            ", newScore = " + newNetwork.getScoreForRequest(nri.request));
+                 }
+                 if (currentNetwork == null ||
+-                        currentNetwork.getCurrentScore() < newNetwork.getCurrentScore()) {
++                      currentNetwork.getScoreForRequest(nri.request) < 
++                        newNetwork.getScoreForRequest(nri.request)) {
+                     if (DBG) log("rematch for " + newNetwork.name());
+                     if (currentNetwork != null) {
+                         if (DBG) log("   accepting network in place of " + currentNetwork.name());
+@@ -4352,6 +4419,8 @@ public class ConnectivityService extends IConnectivityManager.Stub
+                     } else {
+                         if (DBG) log("   accepting network in place of null");
+                     }
++
++
+                     unlinger(newNetwork);
+                     mNetworkForRequestId.put(nri.request.requestId, newNetwork);
+                     if (!newNetwork.addRequest(nri.request)) {
+diff --git a/services/core/java/com/android/server/connectivity/NetworkAgentInfo.java b/services/core/java/com/android/server/connectivity/NetworkAgentInfo.java
+index 0029279..dcb5d51 100644
+--- a/services/core/java/com/android/server/connectivity/NetworkAgentInfo.java
++++ b/services/core/java/com/android/server/connectivity/NetworkAgentInfo.java
+@@ -28,6 +28,7 @@ import android.net.NetworkRequest;
+ import android.os.Handler;
+ import android.os.Messenger;
+ import android.util.SparseArray;
++import android.location.Location;
+ 
+ import com.android.internal.util.AsyncChannel;
+ import com.android.server.ConnectivityService;
+@@ -144,6 +145,14 @@ public class NetworkAgentInfo implements Comparable<NetworkAgentInfo> {
+     // Penalty applied to scores of Networks that have not been validated.
+     private static final int UNVALIDATED_SCORE_PENALTY = 40;
+ 
++    // SINED
++    // Penalty applied to scores of networks that are more than 
++    // LOCATION_PENALTY_THRESHOLD away from requested location
++    private static final int LOCATION_PENALTY = 40;
++
++    // Threshold above which network score is penalized for location
++    private static final float LOCATION_PENALTY_THRESHOLD = 30;
++
+     // Score for explicitly connected network.
+     //
+     // This ensures that a) the explicitly selected network is never trumped by anything else, and
+@@ -231,6 +240,30 @@ public class NetworkAgentInfo implements Comparable<NetworkAgentInfo> {
+         return score;
+     }
+ 
++    // SINED
++    // score this network based on the given network request
++    // this is the core scoring algorithm for the policy engine
++    // right now, scoring on location only
++    public int getScoreForRequest(NetworkRequest request) {
++        int score = getCurrentScore();
++        Location requestedLocation = request.networkCapabilities.getLocation();
++        Location networkLocation   = networkCapabilities.getLocation();
++
++        if (requestedLocation != null && networkLocation != null) {
++            float distance = requestedLocation.distanceTo(networkLocation);
++            if (distance > LOCATION_PENALTY_THRESHOLD) {
++                // apply a penalty if network location is more than
++                // LOCATION_PENALTY_THRESHOLD away
++                score -= LOCATION_PENALTY;
++                if (score < 0) score = 0;
++            }
++        }
++
++        // if location is not requested or unavailable,
++        // continue using Android's scoring function
++        return score;
++    }
++
+     // Get the current score for this Network.  This may be modified from what the
+     // NetworkAgent sent, as it has modifiers applied to it.
+     public int getCurrentScore() {
+-- 
+1.9.1
+

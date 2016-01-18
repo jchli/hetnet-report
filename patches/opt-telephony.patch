@@ -1,0 +1,41 @@
+From d604f8c65fb7b6adb9debbfcb2333a9c72fd85f1 Mon Sep 17 00:00:00 2001
+From: Jincheng Li <jl4569@columbia.edu>
+Date: Sun, 17 Jan 2016 03:28:20 -0500
+Subject: [PATCH] final demo
+
+Change-Id: I92c81ae6488ea148403ab4751b92dc3b180f026c
+---
+ .../internal/telephony/dataconnection/DataConnection.java      | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/src/java/com/android/internal/telephony/dataconnection/DataConnection.java b/src/java/com/android/internal/telephony/dataconnection/DataConnection.java
+index d9501c0..6e085ec 100644
+--- a/src/java/com/android/internal/telephony/dataconnection/DataConnection.java
++++ b/src/java/com/android/internal/telephony/dataconnection/DataConnection.java
+@@ -54,6 +54,7 @@ import android.text.TextUtils;
+ import android.util.Pair;
+ import android.util.Patterns;
+ import android.util.TimeUtils;
++import android.location.Location;
+ 
+ import java.io.FileDescriptor;
+ import java.io.OutputStream;
+@@ -997,6 +998,15 @@ public final class DataConnection extends StateMachine {
+ 
+         result.setNetworkSpecifier(Integer.toString(mPhone.getSubId()));
+ 
++        // SINED
++        // TODO: actually get location info from somewhere (locationMgr?)
++        logd("setting location of cellular network to home");
++
++        Location loc = new Location("SINED-dev");
++        loc.setLatitude(40.801191);
++        loc.setLongitude(-73.960687);
++        result.setLocation(loc);
++
+         return result;
+     }
+ 
+-- 
+1.9.1
+
