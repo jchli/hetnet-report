@@ -49,7 +49,8 @@ The Media-Independent Handover protocol
 \section{Linux Prototype Architecture}
 
 \chapter{Android Networking Stack}
-In order to understand how Android performs network switching and the functionalities it provides similar to MIH, a fair amount of time was spent this semester researching the architecture of Android's networking stack. Here we present the details of our findings.
+In order to understand how Android performs network switching and the functionalities it provides similar to MIH, a fair amount of time was spent this semester researching the architecture of Android's networking stack. Here we present the details of our findings. \\
+Note that although there is some similar content in the Spring 2015 student report, the Android OS version studied there is 4.4 KitKat, whereas this document concerns 6.0 Marshmallow. Android introduced some intelligent network-switching functionality in between these two versions, and therefore there can be significant discrepancies between the network infrastructure of the two versions.
 
 \section{Android Architecture}
 Before we talk about the Android networking stack, we first introduce the architecture of the Android platform. Broadly speaking, Android consists of five layers: Linux kernel, HAL, Android runtime + native libraries, Android Framework, and user applications. These five layers are laid out in the following diagram: % elaborate...
@@ -60,7 +61,7 @@ Before we talk about the Android networking stack, we first introduce the archit
 \newpage
 At the bottom of the Android software stack is the Linux kernel, which provides a level of abstraction between the device hardware and the upper layers of Android. The kernel provides typical low-level system services such as process, memory management, and also includes essential device drivers for hardware such as cellular and WiFi NICs. \\
 The hardware abstraction layer (HAL) defines a standard interface for hardware vendors to implement and allows Android to be agnostic about lower-level driver implementations. We don't discuss HAL at any more length here as it is not vital for our purposes. \\
-Next comes the Android runtime (i.e. Davlik VM) and native libraries, which are implemented in C/C++. \\
+Next comes the Android runtime (i.e. Davlik VM) and native libraries, which are implemented in C/C++. The Dalvik VM is a virtual machine developed by Google to run Java applications on the Linux kernel. It is specifically designed for mobile devices and optimizes memory usage. The libraries at this layer include a subset of standard Java core libraries, and Android libraries including opengl, database (sqlite), webkit, etc. \\
 Layered on top of the runtime and libraries is the Android Framework. This framework is implemented entirely in Java, and provides applications with an API that can be used to interact with system services, including UI, telephony, location, etc. This part of Android is what most of the research effort on Android this semester focused on. The Android demo also directly modifies Android Framework's source code to integrate our middleware functionalities into the system. \\
 Finally on the top level is user applications that interact directly with the user. 
 
@@ -68,15 +69,32 @@ Finally on the top level is user applications that interact directly with the us
 The following classes deal with network connectivity for all types of networks (cellular, WiFi, or ethernet). This is done through an abstraction called NetworkAgent that encapsulates different types of networks into a common interface, as is explained in more detail later in this section.
 
 \subsection{ConnectivityManager}
+Location: \verb|frameworks/base/core/java/android/net/|\\
 In general, classes with a ``Manager'' suffix are singleton classes exposed as part of the Android API for applications. They serve as the interface between application developers and the Android framework. Methods in these classes do not usually contain intricate program logic, but simply call some other system service class (e.g. methods in ConnectivityManager call corresponding methods in ConnectivtyService) which actually implements the required functionality. \\
-In the case of ConnectivityManager, it is reponsible for answering queries about the state of network connectivity, and for notifying applications about network connectivity changes. Additionally, it allows applications to request or select certain networks for their data traffic. This last feature is most relevant to our research, as it provides an entry point for applications to specify the characteristics of the network they prefer. It is essentially a simplified version of the middleware's policy engine. An application can choose a policy for its network traffic, and Android will match the network that scores the highest according to that policy to this application. \\
-The method invoked for applications to request certain networks is \verb|requestNetwork|, which takes as its input a \verb|NetworkRequest|, and a \verb|NetworkCallback|. As its name suggests, the \verb|NetworkCallback| is invoked once the network is switched to one that satisfies the request. The key component of a \verb|NetworkRequest| is a \verb|NetworkCapabilities| object, representing the capabilities of a network. 
+In the case of ConnectivityManager, it is reponsible for answering queries about the state of network connectivity, and for notifying applications about network connectivity changes. Additionally, it allows applications to request or select certain networks for their data traffic. This last feature is most relevant to our research, as it provides an entry point for applications to specify the characteristics of the network they prefer. The implementation of this feature is essentially a simplified version of the middleware's policy engine. An application can choose a policy for its network traffic, and Android will match the network that scores the highest according to that policy to this application. \\
+The method invoked for applications to request certain networks is \verb|requestNetwork|, which takes as its input a \verb|NetworkRequest|, and a \verb|NetworkCallback|. As its name suggests, the \verb|NetworkCallback| is invoked once the network is switched to one that satisfies the request. The key component of a \verb|NetworkRequest| is a \verb|NetworkCapabilities| object, representing the capabilities of a network. This is elaborated more in the following subsection.
 
+\subsection{NetworkCapabilities}
+\verb|NetworkCapabilities| is the class currently used by Android to record information about a generic network. It contains a number of bit-mask fields indicating whether a network has a certain capability, and also a couple of numeric field such as bandwidth. Specifically, the class records the following capabilities about a network:
+\begin{enumerate}
+\item services supported: MMS, SUPL, DUN, FOTA, IMS, CBS, WIFI\_P2P, IA, RCS, XCAP, EIMS
+\item status: INTERNET, NOT\_RESTRICTED, TRUSTED, VALIDATED
+\item charateristics: NOT\_METERED, NOT\_VPN, CAPTIVE\_PORTAL
+\item transport type: CELLULAR, WIFI, ETHERNET, BLUETOOTH, VPN
+\item bandwidth: LinkUpBandwidth, LinkDownBandwidth
+\end{enumerate}
+Note that for bandwidth, the numbers are currently an expected value instead of a measured statistic. \\
+From the list above, we can see that for the most part the capabilities are binary. As such, the ``scoring'' function used by Android on \verb|NetworkCapabilities| is also straightforward: it simply filters out networks that do not satisfy certain capabilities (i.e. there is no score at this stage, it is only a binary filter). We will describe later how this works with another scoring mechanism that together decide which network is best suited to a \verb|NetworkRequest|.
 
 \subsection{ConnectivityService}
-\verb|ConnectivityService| provides implementations of many methods in \verb|ConnectivityManager|.
+\verb|ConnectivityService| provides implementations of many methods in \verb|ConnectivityManager|. We discuss some of these methods relevant to our research below:
+\begin{enumerate}
+\item requestNetwork
+\item rematchNetworkAndRequests
+\end{enumerate}
 
 \subsection{NetworkAgent and NetworkAgentInfo}
+NetworkAgent is used by ConnectivityService to keep track of 
 
 \section{WiFi Networks}
 
