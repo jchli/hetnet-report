@@ -42,16 +42,17 @@ We first introduce the idea of IP mobility. The internet was originally designed
 In both HIP and MIP, this is done through maintaining a unique identifier for a device even when the it changes its IP address. The details of how the identifier is defined and maintained varies for different protocols, but the idea stays the same.
 
 \subsection{HIP}
-The Host Identity Protocol's approach to IP mobility introduces a Host Identity (HI) namespace based on a public key security infrastructure. Each host generates its own public key and uses the hash of that key as its identifier (or HIT - Host Identity Tag). This identifier encapsulates the host's varying IP address, and remains the same regardless of what new IP address the host obtains. TCP sockets are bound to HITs and therefore the connection does not break even if IP adderss changes. Using public keys has the added advantage of security - the host can conveniently prove its identity with a private-key signature. \\
+\textbf{Description:} The Host Identity Protocol's approach to IP mobility introduces a Host Identity (HI) namespace based on a public key security infrastructure. Each host generates its own public key and uses the hash of that key as its identifier (or HIT - Host Identity Tag). This identifier encapsulates the host's varying IP address, and remains the same regardless of what new IP address the host obtains. TCP sockets are bound to HITs and therefore the connection does not break even if IP adderss changes. Using public keys has the added advantage of security - the host can conveniently prove its identity with a private-key signature. \\
 HIP uses a 4-way handshake process to establish connection between two hosts. In its most general form, assuming both hosts are mobile (and their IP addresses may change), a mobile host initiating the connection talks to the rendevzvous server (RVS) in order to reach the other host. The RVS is responsible for keeping track of IP addresses and HITs of communicating hosts. Then the 4-way handshake process follows, which authenticates the two hosts, negotiates security parameters (through Diffie-Hellman exchange), and establishes ESP security associations (IPSec). The two hosts subsequently communicates through ESP payloads. When the IP address of a mobile host changes, HIP will initiate an update process to inform the other host (and RVS) of the change, so that the mapping from HITs to IP addresses can be updated and subsequent communcation sent to the new IP address. \\
-\textbf{Implementation}: We are continuing to use the HIP for Linux implementation available at \url{http://infrahip.hiit.fi/}. It has experimental Android support and is being actively maintained.
+\textbf{Implementation:} We are continuing to use the HIP for Linux implementation available at \url{http://infrahip.hiit.fi/}. It has experimental Android support and is being actively maintained.
 
 \subsection{MIP}
-Mobile IP 
-\textbf{Implementation}: We are not using MIP because there does not seem to be any actively-maintained implementations of MIP available. 
+\textbf{Description:} Mobile IP \\
+\textbf{Implementation:} We are not using MIP because there does not seem to be any actively-maintained implementations of MIP available. 
 
 \subsection{MIH}
-Media-Independent Handover
+\textbf{Description:} Media-Independent Handover \\
+\textbf{Implementation:} 
 
 \section{Linux Implementation}
 
