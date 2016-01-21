@@ -47,8 +47,9 @@ HIP uses a 4-way handshake process to establish connection between two hosts. In
 \textbf{Implementation:} We are continuing to use the HIP for Linux implementation available at \url{http://infrahip.hiit.fi/}. It has experimental Android support and is being actively maintained.
 
 \subsection{MIP}
-\textbf{Description:} Mobile IP \\
-\textbf{Implementation:} We are not using MIP because there does not seem to be any actively-maintained implementations of MIP available. 
+\textbf{Description:} Mobile IP is another protocol for handling IP mobility. There are three main components in a MIP session: mobile node, home agent, and foreign agent. The mobile node is a device with internet connection that may roam between networks. The home agent is a router on the home network of the device, which serves as the anchor point for communication with the mobile node. The foreign agent is a router that may function as the point of attachment for the mobile node when it roams to a foreign network. \\
+In MIP, the varying IP address of the mobile node is encapsulated in its home IP address, obtained from its home agent. Thus, to the outside world, the IP address of the mobile node will always be its home IP address. This is straightforward when the mobile node is on its home network - it simply assumes its home IP address. When the mobile node roams to a foreign network, it first obtains a new IP address called the care-of address. It then sends this information with a registration request to its home agent, which prompts the home agent to create a tunnel between itself and the foreign agent. Subsequently communication between the mobile node and its correspondent node will be tunneled between the home agent the foreign agent. Thus, the node will appear to have its home IP address, when in fact its IP address is the care-of address.
+\textbf{Implementation:} We are not using MIP because after researching available implementations, we were not able to find any actively-maintained implementations of MIP available for Android.
 
 \subsection{MIH}
 \textbf{Description:} Media-Independent Handover \\
