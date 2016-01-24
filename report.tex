@@ -24,7 +24,6 @@
 \tableofcontents
 % \mainmatter
 
-% NEW CHAPTER! %
 \chapter{Introduction}
 Devices with Internet access today are becoming increasingly mobile. The Heterogeneous Networking Middleware project provides a mechanism for devices to seamlessly handle network mobility, and make intelligent decisions about how and when to use different networks across multiple network interfaces. \\
 The project started in 2012 in the IRT lab and went through significant development from 2012 to 2013. After a period of inactivity, it was restarted in Spring 2015 and continued until now (Fall 2015). \\
@@ -56,6 +55,10 @@ In MIP, the varying IP address of the mobile node is encapsulated in its home IP
 \textbf{Implementation:} 
 
 \section{Linux Implementation}
+
+\subsection{Architecture}
+
+\subsection{}
 
 \chapter{Android Networking Stack}
 In order to understand how Android performs intelligent network switching and the functionalities it provides similar to MIH, a fair amount of time was spent this semester researching the architecture of Android's networking stack. The idea is that once we understand the internal structure of Android's networking stack by looking at the source code, we can modify the source code to incorporate functionalities of our middleware into Android. We were able to map out mostly the architecture of Android's network-related classes. Here we present the details of our findings. \\
@@ -98,12 +101,12 @@ From the list above, we can see that for the most part the capabilities are bina
 \subsection{ConnectivityService}
 \verb|ConnectivityService| provides implementations of many methods in \verb|ConnectivityManager|. We discuss some of these methods relevant to our research below:
 \begin{enumerate}
-\item requestNetwork
-\item rematchNetworkAndRequests
+\item \verb|requestNetwork|
+\item \verb|rematchNetworkAndRequests|
 \end{enumerate}
 
 \subsection{NetworkAgent and NetworkAgentInfo}
-NetworkAgent is used by ConnectivityService to keep track of 
+NetworkAgent is used by ConnectivityService to keep track of the status of individual networks of different types. It encapsulates different types of networks including WiFi, cellular and ethernet, into one interface. There are subclasses that extend \verb|NetworkAgent| and deal with one particular type of network (e.g. \verb|WifiNetworkAgent|). % TODO: not finished yet
 
 \section{WiFi Networks}
 
