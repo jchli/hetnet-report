@@ -27,7 +27,7 @@
 \chapter{Introduction}
 Devices with Internet access today are becoming increasingly mobile. The Heterogeneous Networking Middleware project provides a mechanism for devices to seamlessly handle network mobility, and make intelligent decisions about how and when to use different networks across multiple network interfaces. \\
 The project started in 2012 in the IRT lab and went through significant development from 2012 to 2013. After a period of inactivity, it was restarted in Spring 2015 and continued until now (Fall 2015). \\
-The prototype for this project started with a demo on Linux and is currently shifting to Android. Some work was done last semester to port the Linux implementation to Android, while this semester we took a different approach and re-implemented some of the necessary functionalities within the Android Java Frameork. \\
+The prototype for this project started with a demo on Linux and focus is currently shifting to Android. In particular, this semester I focused on implementation of the demo in Android exclusively. Some work was done last semester to port the Linux implementation to Android, but there were issues with the provided C libraries on the Android platform. This semester we took a different approach and re-implemented some of the functionalities of the middleware within the Android Java Frameork. \\
 In this report, I will cover existing work before I started contributing to the project, research done on Android framework's networking stack, and efforts toward implementing the middleware in Android.
 
 \chapter{Existing Work}
@@ -61,19 +61,25 @@ Enables MIHUs to issue commands to lower layers and manage the stream of events 
 \item Media-Independent Information Service \\
 Allows mobile nodes to obtain static information about available networks in its vicinity. This includes general information such as list of networks, their security and QoS support, and also PoA-specific information such as supported data rates, MAC layer types, etc.
 \end{itemize}
-With these services available, MIHUs use information obtained from these services to make decisions about handover and link selection. In our case, the MIHU would be our policy engine, which takes input from MIH, runs them through its algorithms, and decides whether to make a network switch. \\
+MIHUs use information obtained from these services to make decisions about handover and link selection. In our case, the MIHU is the network manager within the middleware, which takes input from MIH, passes them on to the policy manager, which subsequently runs its algorithm to decide whether to make a network switch. \\
 \textbf{Implementation:} Previously we used ODTONE / Open 802.21 as our implementation. This is perfectly fine for Linux. However, there is currently no support for Android. In addition, Android already provides some MIH-related functionalities within its Java framework. Thus instead of porting the ODTONE implementation to Android, our approach became investigating these functionalities in the Android framework, and then incorporating them into our prototype implementation.
 
 \section{Linux Implementation}
-We give a brief overview of the middleware's Linux implementation. This is mainly to provide an understanding of the existing implementation and 
+We give a brief overview of the middleware's Linux implementation. This is mainly to provide an understanding of the existing implementation and serve as a reference for the implementation in Android.
 
 \subsection{Architecture}
+\includegraphics[width=\textwidth]{figures/linux_architecture.png} \\
 
-\subsection{}
+The architecture of the Linux implementation has stayed the same as the previous semester. The middleware implements core functionalities including obtaining information from MIH, evaluating networks based on a policy model, making decisions to switch, and also security and authentication. MIH oversees the network interfaces, providing access to interface events and necessary information for the middleware to make a decision. It is also responsible for passing the command to switch interface, issued from the middleware, to HIP. HIP is ultimately responsible for making the network switch. This is done through custom modifications to HIP (done in the past), which forks a separate process from the main HIP process and handles the interface switch. 
+
+\subsection{Comparison with Android}
+The approach we took to an implementation in Android is largely concerned with the middleware component in this architecture, particularly the policy manager. We no longer need a lot of the machinery in this diagram because they are already provided by Android. For example, the network manager is responsible for communicating with MIH to obtain information about network interfaces. In the Android implementation, MIH information is already available in the framework, so it is no longer necessary to run a separate MIH process and obtain that information through sockets. Additionally, we no longer need to worry about how to make an interface switch, as it is also handled cleanly by Android. \\
+However, we still need to port HIP to Android to allow for seamless handovers. As mentioned, HIP does not need to handle network switching anymore, so the custom modifications are no longer necessary. We can use HIPL's documentation on porting HIPL to Android and run the ported version for our system.
 
 \chapter{Android Networking Stack}
-In order to understand how Android performs intelligent network switching and the functionalities it provides similar to MIH, a fair amount of time was spent this semester researching the architecture of Android's networking stack. The idea is that once we understand the internal structure of Android's networking stack by looking at the source code, we can modify the source code to incorporate functionalities of our middleware into Android. We were able to map out mostly the architecture of Android's network-related classes. Here we present the details of our findings. \\
+In order to understand how Android performs intelligent network switching and the functionalities it provides similar to MIH, a fair amount of time was spent this semester researching the architecture of Android's networking stack. The idea is that once we understand the internal structure of Android's networking stack by looking at the source code, we can modify the source code to incorporate functionalities of our middleware into Android. We were able to map out the architecture of Android's network-related classes. Here we present the details of our findings. \\
 Note that although there is some similar content in the Spring 2015 student report, the Android OS version studied there is 4.4 KitKat, whereas this document concerns 6.0 Marshmallow. Android introduced some intelligent network-switching functionality in between these two versions, and therefore there can be significant discrepancies between the network infrastructure of the two versions.
+
 \section{Android Architecture}
 We first introduce the architecture of the Android platform. Broadly speaking, Android consists of five layers: Linux kernel, HAL, Android runtime + native libraries, Android Framework, and user applications. These five layers are laid out in the following diagram: % elaborate...
 
@@ -87,6 +93,10 @@ The hardware abstraction layer (HAL) defines a standard interface for hardware v
 Next comes the Android runtime (i.e. Davlik VM) and native libraries, which are implemented in C/C++. The Dalvik VM is a virtual machine developed by Google to run Java applications on the Linux kernel. It is specifically designed for mobile devices and optimized for memory usage. The libraries at this layer include a subset of standard Java core libraries, and Android libraries including opengl, database (sqlite), webkit, etc. \\
 Layered on top of the runtime and libraries is the Android Framework. This framework is implemented entirely in Java, and provides applications with an API that can be used to interact with system services, including UI, telephony, location, etc. This part of Android is what most of the research effort on Android this semester focused on. The Android demo also directly modifies Android Framework's source code to integrate our middleware functionalities into the system. \\
 Finally on the top level are applications that interact directly with the user. These include native applications (web browser, settings, email) provided by Google and applications developed by third-party developers.
+
+\section{Networking Stack}
+Here we give an overview of Android's networking stack. Later sections will go into details about its implementation. This should give you a rough idea of how Android manages the various aspects of networking, and how it intelligently decides which networks to use. \\
+\includegraphics[]{figures/android_networking_stack.png}
 
 \section{General Networking}
 The following classes deal with network connectivity for all types of networks (cellular, WiFi, or ethernet). This is done through an abstraction called NetworkAgent that encapsulates different types of networks into a common interface, as is explained in more detail later in this section.
@@ -207,7 +217,7 @@ This will create a branch with the given name in each of the \verb|git| projects
 Unfortunately there is no easy way to upload your changes to a remote repository. The \verb|repo| tool is designed to let you upload your changes to the Google source code server and submit them for review, eventually merging into the \verb|master| branch. However, since we are working on an experimental project with limited time, this is not a desired method. For now I have saved my changes as \verb|patch| files and uploaded them to Github (\url{https://github.com/jchli/hetnet-report}). You can apply them with \verb|git am|. 
 
 \subsubsection{Testing}
-Once changes are made, run the \verb|make -jN| command to build Android, and then either use the emulator or flash a physcial device to test the operating system. I have personally been testing the system on emulator only because there was no Nexus device with more than one type of network. \\
+Once changes are made, run the \verb|make -jN| command to build Android, and then either use the emulator or flash a physcial device to test the operating system. I have personally been testing the system on emulator only because there was no Nexus device with more than one type of network at my disposal. \\
 There are two debugging tools that I found helpful with testing: \verb|adb logcat| and \verb|telnet|, which are detailed below.
 \begin{enumerate}
 \item When browsing Android code you will notice lots of logging lines. These system debug messages are stored in a buffer and can all be viewed and filtered with \verb|adb logcat|. The syntax for doing so is
