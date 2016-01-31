@@ -107,8 +107,8 @@ The following classes deal with network connectivity for all types of networks (
 
 \subsection{ConnectivityManager}
 Location: \verb|frameworks/base/core/java/android/net/|\\
-In general, classes with a ``Manager'' suffix are singleton classes exposed as part of the Android API for applications. They serve as the interface between application developers and the Android framework. Methods in these classes do not usually contain intricate program logic, but simply call some other system service class (e.g. methods in ConnectivityManager call corresponding methods in ConnectivtyService) which actually implements the required functionality. \\
-In the case of ConnectivityManager, it is reponsible for answering queries about the state of network connectivity, and for notifying applications about network connectivity changes. Additionally, it allows applications to request or select certain networks for their data traffic. This last feature is most relevant to our research, as it provides an entry point for applications to specify the characteristics of the network they prefer. The implementation of this feature is essentially a simplified version of the middleware's policy engine. An application can choose a policy for its network traffic, and Android will match the network that scores the highest according to that policy to this application. \\
+As mentioned, classes with a ``Manager'' suffix are singleton classes exposed as part of the Android API for applications. Methods in these classes do not usually contain intricate program logic, but simply call some other system service class (e.g. methods in ConnectivityManager call corresponding methods in ConnectivtyService) which actually implements the required functionality. \\
+\verb|ConnectivityManager| is reponsible for answering queries about the state of network connectivity, and for notifying applications about network connectivity changes. Additionally, it allows applications to request or select certain networks for their data traffic. This last feature is most relevant to our research, as it provides an entry point for applications to specify the characteristics of the network they prefer. The implementation of this feature is essentially a simplified version of the middleware's policy engine. An application can choose a policy for its network traffic, and Android will match the network that scores the highest according to that policy to this application. \\
 The method invoked for applications to request certain networks is \verb|requestNetwork|, which takes as its input a \verb|NetworkRequest|, and a \verb|NetworkCallback|. As its name suggests, the \verb|NetworkCallback| is invoked once the network is switched to one that satisfies the request. The key component of a \verb|NetworkRequest| is a \verb|NetworkCapabilities| object, representing the capabilities of a network. This is elaborated more in the following subsection.
 
 \subsection{NetworkCapabilities}
@@ -124,17 +124,23 @@ Note that for bandwidth, the numbers are currently an expected value instead of 
 From the list above, we can see that for the most part the capabilities are binary. As such, the ``scoring'' function used by Android on \verb|NetworkCapabilities| is also straightforward: it simply filters out networks that do not satisfy certain capabilities (i.e. there is no score at this stage, it is only a binary filter). We will describe later how this works with another scoring mechanism that together decide which network is best suited to a \verb|NetworkRequest|.
 
 \subsection{ConnectivityService}
-\verb|ConnectivityService| provides implementations of many methods in \verb|ConnectivityManager|. We discuss some of these methods relevant to our research below:
+Location: \verb|frameworks/base/services/core/java/com/android/server/| \\
+\verb|ConnectivityService| provides implementations of many methods in \\ \verb|ConnectivityManager|. We discuss some of these methods relevant to our research below:
 \begin{enumerate}
 \item \verb|requestNetwork| \\
-As mentioned, this is the method that applications invoke to request a network with the specified \verb|NetworkCapabilities|. 
-\item \verb|rematchNetworkAndRequests|
+As mentioned, this is the method that applications invoke to request a network with the specified \verb|NetworkCapabilities|. The implementation of this method invokes the \verb|rematchNetworkAndRequests| method, which matches the best known network to the given request, and then after switching to that network, calls the given callback function.
+\item \verb|rematchNetworkAndRequests| \\
+This method is reponsible for matching the list of known networks to the list of network requests. Network requests include both default requests (e.g. cellular request, request for any network) and application-specific requests. The matching process is as follows: first, newtorks are filtered based on whether they have the specified capabilities, then, networks that pass through the filter are ranked by their scores, and if the one with the highest score is not the current network, a network switch to that network ensues. Also, if a network does not satisfy any requests, it is removed from the list of monitored networks. Network scores are computed in bearer-specific code (i.e. code managing a specific type of networks) and reported by \verb|NetworkAgent|. \verb|ConnectivityService| does not modify the scores of networks.
+\item \verb|updateLinkProperties|, \verb|updateRoutes|, \verb|updateInterfaces| \\
+These several update functions are the ``switching functions'' that we have been trying to locate. Internally they delegate the task of updating interfaces / routes to the network daemon, which passes commands down to the HAL layer, but in the Android framework, these are the functions that are responsible for switching between network interfaces. In fact, in our implementation of the demo, we don't ever call these functions directly. What we do instead is modify Android's scoring mechanism, and let Android handle the switching between networks.
 \end{enumerate}
 
 \subsection{NetworkAgent and NetworkAgentInfo}
-\verb|NetworkAgent| provides a common interface for different types of networks to report their status to \verb|ConnectivityService|. For example, it provides methods such as \verb|sendLinkProperties|, \verb|sendNetworkScore|, which gets called when there is a change in a network's properties or score. These updates are done with a mesage-passing style Its subclasses optionally extend these methods to provide code that deals specifically with one type of network. \verb|NetworkAgentInfo| is a wrapper around \verb|NetworkAgent|, and \verb|ConnectivityService| communicates directly with \verb|NetworkAgentInfo| to obtain information about all networks. 
+Location: \verb|frameworks/base/core/java/android/com/server/connectivity/| \\
+\verb|NetworkAgent| provides a common interface for different types of networks to report their status to \verb|ConnectivityService|. For example, it provides methods such as \verb|sendLinkProperties|, \verb|sendNetworkScore|, which gets called when there is a change in a network's properties or score. Subclasses optionally extend the methods of \verb|NetworkAgent| to deal with the specifics of a type of network. Updates by \verb|NetworkAgent| are done with a mesage-passing mechanism widely used in Android (dubbed the Looper framework, relevant article: \url{http://blog.coldflake.com/posts/Android-style-Message-Passing/}). Thus \verb|ConnectivityService| does not directly interact with \verb|NetworkAgent|. Instead, \verb|NetworkAgentInfo| wraps around \verb|NetworkAgent|, storing the current status of a network (including its score), and enables \verb|ConnectivityService| to obtain information about all networks directly. One method of interest to us in \verb|NetworkAgentInfo| is \verb|getCurrentScore|.
 
 \section{WiFi Networks}
+Android has a suite of classes built around managing WiFi networks. Compared to other types of networks, there are usually vastly more choices for WiFi hotspots, and Android has algorithms to intelligently decide which WiFi network to switch to based network characteristics and past user preferences.
 
 \subsection{WifiManager}
 The WifiManager class is exposed as part of Android's application API. It provides methods for applications to manage all aspects of WiFi connectivity.
@@ -212,6 +218,18 @@ which flashes the system image onto the device.\\
 For more information on running builds and choosing the appropriate build configuration for a device, see \url{https://source.android.com/source/running.html}.
 
 \subsection{Developing}
+
+\subsection{Repository Structure}
+I found \href{http://stackoverflow.com/questions/9046572/how-to-understand-the-directory-structure-of-android-root-tree}{this} Stackoverflow post very useful in understanding what the purpose of the various directories in the Android repository. The following directories are most relevant to development:
+\begin{itemize}
+\item Build - files for the Android build system, including the \verb|envsetup.sh| script
+\item Device - code for specific devices. This directory contains a lot of build configurations and scripts for different devices, including Nexus ones and emulators.
+\item Frameworks - the bulk of the Android framework implemenation. This directory is composed of various stand-alone git repositories, which together are managed by \verb|repo|. Most of what we are working with can be found in the \verb|frameworks/base|, \verb|frameworks/opt/telephony|, \verb|frameworks/opt/net/wifi| projects.
+\item Packages - contains source code for the default applications
+\item Prebuilt - contains prebuilt binaries for convenience. These include cross-compilation toolchains, which can come in handy when porting HIP. Also included are device emulator binaries and Android Studio.
+\item Out - build output directory.
+\item (Kernel) - note that this is NOT part of the Android source download. In order to obtain the kernel, you have to download it separately. Also note that given the number of Android devices, the kernel source has a lot of versions, so be careful which version of the kernel you download.
+\end{itemize}
 
 \subsubsection{Repository Management}
 As previously mentioned, \verb|repo| is used to manage development of the Android project. Development of a new topic branch typically starts with
