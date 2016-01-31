@@ -80,8 +80,8 @@ However, we still need to port HIP to Android to allow for seamless handovers. A
 In order to understand how Android performs intelligent network switching and the functionalities it provides similar to MIH, a fair amount of time was spent this semester researching the architecture of Android's networking stack. The idea is that once we understand the internal structure of Android's networking stack by looking at the source code, we can modify the source code to incorporate functionalities of our middleware into Android. We were able to map out the architecture of Android's network-related classes. Here we present the details of our findings. \\
 Note that although there is some similar content in the Spring 2015 student report, the Android OS version studied there is 4.4 KitKat, whereas this document concerns 6.0 Marshmallow. Android introduced some intelligent network-switching functionality in between these two versions, and therefore there can be significant discrepancies between the network infrastructure of the two versions.
 
-\section{Android Architecture}
-We first introduce the architecture of the Android platform. Broadly speaking, Android consists of five layers: Linux kernel, HAL, Android runtime + native libraries, Android Framework, and user applications. These five layers are laid out in the following diagram: % elaborate...
+\section{Android OS Architecture}
+We first introduce the architecture of the Android operating system. Broadly speaking, Android consists of five layers: Linux kernel, HAL, Android runtime + native libraries, Android Framework, and user applications. These five layers are laid out in the following diagram: % elaborate...
 
 % android architecture diagram here
 \begin{center}
@@ -95,8 +95,12 @@ Layered on top of the runtime and libraries is the Android Framework. This frame
 Finally on the top level are applications that interact directly with the user. These include native applications (web browser, settings, email) provided by Google and applications developed by third-party developers.
 
 \section{Networking Stack}
-Here we give an overview of Android's networking stack. Later sections will go into details about its implementation. This should give you a rough idea of how Android manages the various aspects of networking, and how it intelligently decides which networks to use. \\
-\includegraphics[]{figures/android_networking_stack.png}
+Here we give an overview of Android's networking stack, including how Android structures its networking classes to manage the various aspects of networking, and how Android intelligently decides which networks to use. Later sections will go into details about the implementation of the networking stack. \\
+
+\includegraphics[scale=0.3]{figures/android_networking_stack.png}
+
+There are roughly three layers in Android's networking stack (and incidentally, a lot of other components in the framework also adopt this architecture). The top layer has classes that export their methods as part of Android's API for application programmers. These classes typically have the `manager' suffix. The middle layer is Android's various services, which contains implementation logic for a lot of the methods that managers export. These services are long-running processes in the background that do not get interrupted by users switching between applications. Finally, the bottom layer, or any classes below the service layer, are specific implementations for different components of the Android framework. In the case of the networking stack, one very important class at this layer is \verb|NetworkAgent|. This class provides a common interface for different types of networks (e.g. WiFi, cellular), and enables \verb|ConnectivityService| to manage these networks uniformly. \\
+The current version of Android allows applications to request networks with certain characteristics. These are true-false options that are detailed in the \verb|NetworkCapabilities| section below. When Android selects a network for an application, it first filters the list of available networks with the requested characteristics. If any characteristic does not match, the network is abandoned. Then, for all networks that pass the filter, it ranks these networks by their scores, and switches to the one with the highest score. Scoring for networks is managed differently for different types of networks. For WiFi networks, there is a scoring function within \verb|WifiStateMachine| that runs through several checks repeatedly, each time increasing/decreasing a network's score. For cellular networks, since there is usually only one such network, the scoring is very simple - it has either the maximum score or 0 depending on whether internet access has been verified.
 
 \section{General Networking}
 The following classes deal with network connectivity for all types of networks (cellular, WiFi, or ethernet). This is done through an abstraction called NetworkAgent that encapsulates different types of networks into a common interface, as is explained in more detail later in this section.
@@ -108,7 +112,7 @@ In the case of ConnectivityManager, it is reponsible for answering queries about
 The method invoked for applications to request certain networks is \verb|requestNetwork|, which takes as its input a \verb|NetworkRequest|, and a \verb|NetworkCallback|. As its name suggests, the \verb|NetworkCallback| is invoked once the network is switched to one that satisfies the request. The key component of a \verb|NetworkRequest| is a \verb|NetworkCapabilities| object, representing the capabilities of a network. This is elaborated more in the following subsection.
 
 \subsection{NetworkCapabilities}
-\verb|NetworkCapabilities| is the class currently used by Android to record information about a generic network. It contains a number of bit-mask fields indicating whether a network has a certain capability, and also a couple of numeric field such as bandwidth. Specifically, the class records the following capabilities about a network:
+\verb|NetworkCapabilities| is the class currently used by Android to record information about a generic network. It contains a number of bit-mask fields indicating whether a network has a certain capability, and also a couple of numeric field such as bandwidth. Specifically, the class records the following capabilities about a network (categorization by myself):
 \begin{enumerate}
 \item services supported: \verb|MMS|, \verb|SUPL|, \verb|DUN|, \verb|FOTA|, \verb|IMS|, \verb|CBS|, \verb|WIFI_P2P|, \verb|IA|, \verb|RCS|, \verb|XCAP|, \verb|EIMS|
 \item status: \verb|INTERNET|, \verb|NOT_RESTRICTED|, \verb|TRUSTED|, \verb|VALIDATED|
@@ -122,12 +126,13 @@ From the list above, we can see that for the most part the capabilities are bina
 \subsection{ConnectivityService}
 \verb|ConnectivityService| provides implementations of many methods in \verb|ConnectivityManager|. We discuss some of these methods relevant to our research below:
 \begin{enumerate}
-\item \verb|requestNetwork|
+\item \verb|requestNetwork| \\
+As mentioned, this is the method that applications invoke to request a network with the specified \verb|NetworkCapabilities|. 
 \item \verb|rematchNetworkAndRequests|
 \end{enumerate}
 
 \subsection{NetworkAgent and NetworkAgentInfo}
-NetworkAgent is used by ConnectivityService to keep track of the status of individual networks of different types. It encapsulates different types of networks including WiFi, cellular and ethernet, into one interface. There are subclasses that extend \verb|NetworkAgent| and deal with one particular type of network (e.g. \verb|WifiNetworkAgent|). % TODO: not finished yet
+\verb|NetworkAgent| provides a common interface for different types of networks to report their status to \verb|ConnectivityService|. For example, it provides methods such as \verb|sendLinkProperties|, \verb|sendNetworkScore|, which gets called when there is a change in a network's properties or score. These updates are done with a mesage-passing style Its subclasses optionally extend these methods to provide code that deals specifically with one type of network. \verb|NetworkAgentInfo| is a wrapper around \verb|NetworkAgent|, and \verb|ConnectivityService| communicates directly with \verb|NetworkAgentInfo| to obtain information about all networks. 
 
 \section{WiFi Networks}
 
