@@ -4,6 +4,7 @@
 \usepackage{lmodern}
 \usepackage{hyperref}
 \usepackage{graphicx}
+\usepackage{float}
 \usepackage[english]{babel}
 
 % title and subtitle
@@ -280,7 +281,58 @@ prints all debug messages with the ConnectivityService tag, and silences all oth
 The console provides several useful functionalities, among which is geo location provider emulation. Inside the console, you can issue commands such as \verb|geo fix <longitude> <latitude>| to send a fixed GPS location to the emulator. This can be particularly useful for our purposes since our policy vector consists of the location parameter.
 \end{enumerate}
 
+\newpage
+
 \section{Android Demo Implementation}
-This section talks about implementation of the demo in Android. 
+
+\subsection{Design}
+We first talk about the design of the demo implementation. Apart from the networking components that are already available in Android, there are three components of the middleware we need to be concerned with: the policy engine, HIP, and MIH. Our approach is to re-implement the policy engine in the Android framework, port the HIP implementation, and reuse the existing MIH functionality in Android. The first two choices are straightforward: since Android already provides a mechanism for applications to request networks with certain capabilities, it makes sense to extend on this to incorporate our policy engine; there are already successful efforts to port HIP for Linux to Android, so it also makes sense to use the ported version of HIPL for Android. For MIH, there is a choice between porting an MIH implementation and reusing what is available in Android. The caveat for using the MIH functionality available in Android is that Android does not have a unified MIH interface for all types of networks. Events from the WiFi subsystem is completely separate from events from the cellular network subsystem. This is usable, but complicates the implementation. Given that there is no successful port of MIH to Android yet, it seems desirable to reuse MIH components in Android. Note that the Multi-nets paper claim they have implemented a monitoring engine for Android (although their Android version is 4.3). This may be the MIH component we are looking for in Android. \\
+We did not really end up incorporating the MIH functionality in Android. Instead we are using location as the only parameter of interest, and obtaining location information through a combination of \verb|LocationManager| and hard-coding (this information is what MIIS would provide). We give nearby networks a higher score, thus ranking them higher on the list of available networks. Android would then select the nearest network to connect to. 
+
+\begin{center}
+\includegraphics[scale=0.4]{figures/android_demo_design.png}
+\end{center}
+
+Above shows a diagram of our implementation design. Gray rectangles are classes, while yellow ones are methods. Entities marked red are ones being modified. We first enhance \verb|NetworkCapabilities| with the location parameter. Then, in \verb|NetworkAgent|, we implement an additional method called \verb|getScoreForRequest|, which matches network requests with the capabilities of the network, and calculates a score for the network based on its distance to the requested location. In \verb|ConnecitivtyService|, instead of scoring networks without reference to outstanding network requests, we use the new \verb|getScoreForRequest| function to score networks and rank them based on the extent to which they fulfill the current request. Thus the highest-ranked network will be the one nearest to the requested location, and Android will switch to that network. \\
+Porting the HIP daemon is a separate task from implementation in the Android framework. I attempted to use a newer toolchain when cross-compiling the HIP code, with no success because of compilation errors. I then resorted to the porting script available from last semester's work, again to no avail. This time I was able to compile and load the binary onto Android, but Android keeps producing the following error:
+\begin{verbatim}
+error: only position independent executables (PIE) are supported.
+\end{verbatim}
+The cause of this appears to be a security feature in Android, which randomizes the address space of processes, making it difficult for attackers to exploit bugs in the program. I did not have enough time to investigate how to properly cross-compile HIP as a position-independent executable and load it onto Android.
+
+\subsection{Implementation}
+We show here some code snippets in my implementation. \\
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.25]{figures/location.png}
+  \caption{Enhancing NetworkCapabilities with Location}
+\end{figure}
+We add a location field to \verb|NetworkCapabilities|. The \verb|satisfiedByLocation| function checks if two networks are close to each other (i.e. within some constant radius). Since we have not tested the demo with a real device yet, the constant here has not been verified to work well. It may make sense to parameterize it on the signal strength of the network. \\
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.25]{figures/rematch.png}
+  \caption{Ranking Networks by Request-based Scores}
+\end{figure}
+Figures 4.2 and 4.3 show the \verb|getScoreForRequest| function and its use in \verb|ConnectivityService|. We score networks on its distance to the requested location. If it is far away from the requested location, we apply a penalty to the network, otherwise we keep its score unchanged (existing scores are calculated by bearer-specific code).
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.25]{figures/getScoreForRequest.png}
+  \caption{getScoreForRequest}
+\end{figure}
+Finally, Figure 4.4 shows how we dynamically listen to location updates from \verb|LocationManager| and update the location of the default request. This ensures that we are always requesting for the network closest to the device.
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.25]{figures/locationRequest.png}
+  \caption{Updating Default Request to Current Location}
+\end{figure}
+
+\subsection{Future Work}
+Continuing the implementation in Android, there are several tasks available:
+\begin{itemize}
+\item Make use of the MIH events in Android. Have middleware receive events about network availability / teardown, and act accordingly.
+\item Enhance networks objects in Android with more statistics such as bandwidth, measured by testing download/upload link speed. Another possible approach is to develop a prototype for the MIIS database and query that database within Android.
+\item Develop a full-fledged policy engine that considers several parameters and makes an intelligent decision about network choice.
+\item Continue to work on cross-compiling HIPL to Android
+\end{itemize}
 
 \end{document}
