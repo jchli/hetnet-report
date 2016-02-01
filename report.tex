@@ -137,22 +137,39 @@ These several update functions are the ``switching functions'' that we have been
 
 \subsection{NetworkAgent and NetworkAgentInfo}
 Location: \verb|frameworks/base/core/java/android/com/server/connectivity/| \\
-\verb|NetworkAgent| provides a common interface for different types of networks to report their status to \verb|ConnectivityService|. For example, it provides methods such as \verb|sendLinkProperties|, \verb|sendNetworkScore|, which gets called when there is a change in a network's properties or score. Subclasses optionally extend the methods of \verb|NetworkAgent| to deal with the specifics of a type of network. Updates by \verb|NetworkAgent| are done with a mesage-passing mechanism widely used in Android (dubbed the Looper framework, relevant article: \url{http://blog.coldflake.com/posts/Android-style-Message-Passing/}). Thus \verb|ConnectivityService| does not directly interact with \verb|NetworkAgent|. Instead, \verb|NetworkAgentInfo| wraps around \verb|NetworkAgent|, storing the current status of a network (including its score), and enables \verb|ConnectivityService| to obtain information about all networks directly. One method of interest to us in \verb|NetworkAgentInfo| is \verb|getCurrentScore|.
+\verb|NetworkAgent| provides a common interface for different types of networks to report their status to \verb|ConnectivityService|. For example, it provides methods such as \verb|sendLinkProperties|, \verb|sendNetworkScore|, which gets called when there is a change in a network's properties or score. Subclasses optionally extend the methods of \verb|NetworkAgent| to deal with the specifics of a type of network. Updates by \verb|NetworkAgent| are done with a mesage-passing mechanism widely used in Android (dubbed the Looper framework, see \href{http://blog.coldflake.com/posts/Android-style-Message-Passing/}{this} relevant article). Thus \verb|ConnectivityService| does not directly interact with \verb|NetworkAgent|. Instead, \verb|NetworkAgentInfo| wraps around \verb|NetworkAgent|, storing the current status of a network (including its score), and enables \verb|ConnectivityService| to obtain information about all networks directly. One method of interest to us in \verb|NetworkAgentInfo.getCurrentScore|.
 
 \section{WiFi Networks}
-Android has a suite of classes built around managing WiFi networks. Compared to other types of networks, there are usually vastly more choices for WiFi hotspots, and Android has algorithms to intelligently decide which WiFi network to switch to based network characteristics and past user preferences.
+Android has a suite of classes built around managing WiFi networks. Compared to other types of networks, there are usually a long list of WiFi networks available, and the device needs to choose to connect to one of them (with the occasional help of users). Given this, Android implements algorithms to intelligently decide which WiFi network to use based network characteristics and past user preferences.
 
 \subsection{WifiManager}
-The WifiManager class is exposed as part of Android's application API. It provides methods for applications to manage all aspects of WiFi connectivity.
-
-\subsection{WifiService}
+As with most manager classes, \verb|WifiManager| provides an API for Android applications, enabling them to manage all aspects of WiFi connectivity. Most of the relevant methods in \verb|WifiManager| have already been covered by the previous student report, so they are not repeated here. The following is an overview of the API that \verb|WifiManager| provides:
+\begin{enumerate}
+\item View and update the list of configured networks.
+\item Connect or tear down a network. Query dynamic information about the currently active network.
+\item Results of access point scans.
+\item Defines Intent actions that are broadcast upon change in WiFi state (Intents are asynchronous messages that allow applications to request functionality from other Android components).
+\end{enumerate}
 
 \subsection{WifiStateMachine}
+\verb|WiFiStateMachine| implements the core logic of the WiFi subsystem. WiFi connectivity is managed as a state machine with around 24 states, examples of which are \verb|SupplicantStartingState|, \verb|ScanModeState|, \verb|ConnectModeState|, \verb|ObtainingIpState|, etc. Upon transitioning into a state, the state machine initiates some action (e.g. start scanning for networks, start dhcp). When the action completes, an event is typically triggered (e.g. scan result available, connected to network), and a message is sent back to the state machine, causing the state machine to transition into another state. \\
+Notably, WiFi networks are scored by the \verb|calculateWifiScore| function in \verb|WifiStateMachine|. This function is routinely called to update the score of a network based on several statistics: the number of times the user turned off wifi to switch to LTE, the number of times the link is stuck (i.e. bad packet rate), the estimated link speed of the network, and the signal strength of the network.
+
+\subsubsection{Scenario: Transitioning from LTE to WiFi}
+Observing the sequence of events that happen when Android transitions from an LTE network to a WiFi network is very interesting and helped me understand a lot about how the WiFi subsystem works. We reproduce the sequence of events here for future reference. \\
+
+\includegraphics[scale=0.4]{figures/lte_to_wifi.png}
+
+We assume here that the event that triggers the transition is the availability of new scan results, as opposed to, for instance, the user turning on the WiFi switch. When new scan results become available, the WiFi supplicant sends the event to \verb|WifiMonitor|, which then notifies \verb|WifiStateMachine| that new results are available. \verb|WifiStateMachine| receives this event in \verb|ConnectMode| (the mode it stays in when no WiFi networks are available to connect to), and subsequently attempts to connect to a network in the scan results. Here Android has to make a decision about which network to connect to. This is done with \verb|WifiAutoJoinController.attemptAutoJoin()|. We explain this in detail in the next subsection on the auto-join controller. Once \verb|attemptAutoJoin| decides which network to connect to, it sets that network as the default network, and delegates the task of actually connecting to it down to \verb|WifiNative|. Later, as the network is connected, a network connection event is triggered, sending \verb|WifiStateMachine| into \verb|ObtainingIpState|. Here the state machine starts the dhcp daemon, obtaining an IP address. Once done, it updates the corresponding link properties (properties recorded in the Android framework, not hardware properties). Finally, \verb|WifiNetworkAgent| sends the updated link properties to \verb|ConnectivityService|, which then calls its various update functions to update the interface, route, DNS, etc. This completes the switch to the new WiFi network.
 
 \subsection{WifiAutoJoinController}
+The function \verb|attemptAutoJoin| in this class implements the core of a network switching algorithm. It runs through the list of networks, and for each network, considers several factors to decide whether it should be switched to. The factors include whether the user has selected this network before, the number of times we have attempted to join this network but failed, whether the network actually has internet access the last time we joined it, the signal strength of the network, the score of the network (as calculated by \verb|calculateWifiScore|), etc. It also considers special cases and deal with them accordingly. For example, when the user is using an application with streaming service (e.g. VoIP), it does not attempt to switch to a new network.
 
 \section{Cellular Networks}
+
 \subsection{TelephonyManager}
+
+
 \subsection{DataConnection}
 
 \chapter{Implementation in Android}
@@ -228,7 +245,7 @@ I found \href{http://stackoverflow.com/questions/9046572/how-to-understand-the-d
 \item Packages - contains source code for the default applications
 \item Prebuilt - contains prebuilt binaries for convenience. These include cross-compilation toolchains, which can come in handy when porting HIP. Also included are device emulator binaries and Android Studio.
 \item Out - build output directory.
-\item (Kernel) - note that this is NOT part of the Android source download. In order to obtain the kernel, you have to download it separately. Also note that given the number of Android devices, the kernel source has a lot of versions, so be careful which version of the kernel you download.
+\item (Kernel) - source for the Android kernel. Note that this is NOT part of the Android source download. In order to obtain the kernel, you have to download it separately. Also note that given the number of Android devices, the kernel source has a lot of versions, so be careful which version of the kernel you download.
 \end{itemize}
 
 \subsubsection{Repository Management}
