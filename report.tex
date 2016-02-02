@@ -286,7 +286,16 @@ The console provides several useful functionalities, among which is geo location
 \section{Android Demo Implementation}
 
 \subsection{Source Code}
-I have saved my changes to the Android source tree as \verb|patch| files and uploaded them to Github (\url{https://github.com/jchli/hetnet-report}). The rationale for doing this was explained in the ``Repository Management'' subsection above. After obtaining the source code of Android, you can apply the changes with the \verb|git am <patch file>| command within the appropriate directories in the Android framework. The two patches are for the \verb|frameworks/base| project and the \verb|frameworks/opt/telephony| project, respectively.
+I have saved my changes to the Android source tree as \verb|patch| files and uploaded them to Github (\url{https://github.com/jchli/hetnet-report}). The rationale for doing this was explained in the ``Repository Management'' subsection above. After obtaining the source code of Android, you can apply the changes with the \verb|git am <patch file>| command within the appropriate directories in the Android framework. The two patch files are for the \verb|frameworks/base| project and the \verb|frameworks/opt/telephony| project, respectively. \\
+For ease of finding the modifications, I have marked all the code I wrote with the \verb|// SINED| comment. I have also commented on any non-trivial code about its functionality. When navigating the code base it should be fairly easy to locate the changes I made, and to comprehend what the purpose of the code is. The following sections also give a detailed description of the changes. \\
+List of classes I have modified:
+\begin{itemize}
+\item NetworkCapabilities (base)
+\item NetworkRequest (base)
+\item ConnectivityService (base)
+\item NetworkAgentInfo (base)
+\item DataConnection (opt/telephony)
+\end{itemize}
 
 \subsection{Design}
 We first talk about the design of the demo implementation. Apart from the networking components that are already available in Android, there are three components of the middleware we need to be concerned with: the policy engine, HIP, and MIH. Our approach is to re-implement the policy engine in the Android framework, port the HIP implementation, and reuse the existing MIH functionality in Android. The first two choices are straightforward: since Android already provides a mechanism for applications to request networks with certain capabilities, it makes sense to extend on this to incorporate our policy engine; there are already successful efforts to port HIP for Linux to Android, so it also makes sense to use the ported version of HIPL for Android. For MIH, there is a choice between porting an MIH implementation and reusing what is available in Android. The caveat for using the MIH functionality available in Android is that Android does not have a unified MIH interface for all types of networks. Events from the WiFi subsystem is completely separate from events from the cellular network subsystem. This is usable, but complicates the implementation. Given that there is no successful port of MIH to Android yet, it seems desirable to reuse MIH components in Android. Note that the Multi-nets paper claim they have implemented a monitoring engine for Android (although their Android version is 4.3). This may be the MIH component we are looking for in Android. \\
