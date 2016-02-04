@@ -316,7 +316,7 @@ error: only position independent executables (PIE) are supported.
 The cause of this appears to be a security feature in Android, which randomizes the address space of processes, making it difficult for attackers to exploit bugs in the program. There was not enough time to investigate how to properly cross-compile HIP as a position-independent executable and load it onto Android.
 
 \subsection{Implementation}
-We show here some code snippets in my implementation, and explain their purpose. \\
+We show here some code snippets that demonstrate the core functionality implemented in the demo, and explain their purpose. \\
 \begin{figure}[H]
   \centering
   \includegraphics[scale=0.25]{figures/location.png}
@@ -344,7 +344,7 @@ Finally, with the scoring mechanism in place, we demonstrate its functionality b
   \caption{Updating Default Request to Current Location}
 \end{figure}
 
-The above code segments show the core of the implementation effort in Android. The demo is able to run on Android emulator, but since we don't have access to a device with both WiFi and cellular networks, the network switch has not been tested. 
+Currently, the demo is able to run on Android emulator. Since we don't have access to a device with both WiFi and cellular networks, network switching has not been tested. 
 
 \subsection{Future Work}
 Continuing the implementation in Android, there are several tasks available:
